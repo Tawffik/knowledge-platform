@@ -1,0 +1,199 @@
+openapi: 3.1.0
+info:
+  title: Portfolio Platform API (working lab portfolio)
+  version: 0.1.0-draft
+  description: >
+    مسودة عقد API للمنصة — مقترح Instinct في إطار تقسيم مقبول من الطرفين،
+    لم يُعتمد نهائيًا. المبدأ الحاكم: كل ادعاء على الشاشة له دليل قابل للتكرار
+    (Evidence + MetricRun)، وكل إدخال معرفي له تصنيف تحقق ومصدر وتاريخ فحص.
+servers:
+  - url: http://127.0.0.1:8000
+tags:
+  - name: projects
+  - name: knowledge
+  - name: ledger
+  - name: reviews
+paths:
+  /projects:
+    get:
+      tags: [projects]
+      summary: قائمة المشاريع (بطاقات حية)
+      parameters:
+        - name: skill
+          in: query
+          schema: {type: string}
+          description: تصفية بوسم مهارة (بحث المقابلات)
+        - name: status
+          in: query
+          schema: {type: string, enum: [active, archived, wip]}
+      responses:
+        '200':
+          description: قائمة مشاريع
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Project'}
+  /projects/{slug}:
+    get:
+      tags: [projects]
+      summary: مشروع واحد مع أدلته ومقاييسه
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: {type: string, pattern: '^[a-z0-9-]+$'}
+      responses:
+        '200':
+          description: مشروع مع Evidence وMetricRun
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProjectDetail'}
+        '404': {description: غير موجود}
+  /knowledge:
+    get:
+      tags: [knowledge]
+      summary: إدخالات الخزنة القابلة للبحث
+      parameters:
+        - name: q
+          in: query
+          schema: {type: string}
+        - name: label
+          in: query
+          schema: {$ref: '#/components/schemas/VerificationLabel'}
+      responses:
+        '200':
+          description: إدخالات معرفة
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/KnowledgeEntry'}
+    post:
+      tags: [knowledge]
+      summary: إضافة إدخال معرفة — المصدر وتاريخ الفحص إلزاميان
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/KnowledgeEntryIn'}
+      responses:
+        '201': {description: أُنشئ}
+        '422': {description: حقول التحقق ناقصة أو تصنيف غير صالح}
+  /ledger:
+    get:
+      tags: [ledger]
+      summary: سجل اللاب (تشغيلات حقيقية بأوامرها)
+      parameters:
+        - name: project
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: إدخالات ليدجر
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/LedgerEntry'}
+    post:
+      tags: [ledger]
+      summary: تسجيل تشغيلة — أمر التشغيل إلزامي لقابلية التكرار
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LedgerEntryIn'}
+      responses:
+        '201': {description: سُجل}
+        '422': {description: أمر تشغيل أو نتيجة ناقصة}
+  /reviews:
+    post:
+      tags: [reviews]
+      summary: تسجيل مراجعة متبادلة — السبب إلزامي
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviewRecordIn'}
+      responses:
+        '201': {description: سُجلت}
+        '422': {description: قرار بلا سبب مرفوض}
+components:
+  schemas:
+    VerificationLabel:
+      type: string
+      enum: [tested, documented, untested]
+      description: مختبَر فعليًا / موثق من المصدر / غير مختبَر
+    Evidence:
+      type: object
+      required: [type, url, recorded_at]
+      properties:
+        type: {type: string, enum: [commit, test-output, video, metric, doc]}
+        url: {type: string, format: uri}
+        note: {type: string}
+        recorded_at: {type: string, format: date}
+    MetricRun:
+      type: object
+      required: [name, baseline, result, method, run_command, pass_fail_criteria, declared_failing_cases, run_at]
+      properties:
+        name: {type: string}
+        baseline: {type: string, description: قيمة الأساس قبل التغيير}
+        result: {type: string, description: القيمة بعد التغيير}
+        method: {type: string, description: طريقة القياس}
+        run_command: {type: string, description: أمر التشغيل القابل للتكرار}
+        environment: {type: string, description: نسخ/مدخلات ثابتة}
+        pass_fail_criteria: {type: string, description: معايير النجاح والفشل معلنة مسبقًا}
+        declared_failing_cases: {type: string, description: الحالات الفاشلة المقصودة المعلنة}
+        run_at: {type: string, format: date-time}
+    Project:
+      type: object
+      required: [slug, title, status, skills]
+      properties:
+        slug: {type: string, pattern: '^[a-z0-9-]+$'}
+        title: {type: string}
+        summary: {type: string}
+        status: {type: string, enum: [active, archived, wip]}
+        skills: {type: array, items: {type: string}}
+        attribution: {type: string, description: نسب المنشأ بأمانة (فورك/أصلي/مساهمة)}
+    ProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            evidence: {type: array, items: {$ref: '#/components/schemas/Evidence'}}
+            metrics: {type: array, items: {$ref: '#/components/schemas/MetricRun'}}
+    KnowledgeEntry:
+      type: object
+      required: [title, kind, verification, source_url, checked_at]
+      properties:
+        title: {type: string}
+        kind: {type: string, enum: [writeup, cheatsheet, tool-note, research]}
+        body: {type: string}
+        tags: {type: array, items: {type: string}}
+        verification: {$ref: '#/components/schemas/VerificationLabel'}
+        source_url: {type: string, format: uri}
+        checked_at: {type: string, format: date}
+    KnowledgeEntryIn:
+      $ref: '#/components/schemas/KnowledgeEntry'
+    LedgerEntry:
+      type: object
+      required: [project_slug, action, result, run_command, ran_at]
+      properties:
+        project_slug: {type: string}
+        action: {type: string}
+        result: {type: string, enum: [pass, fail, blocked]}
+        run_command: {type: string}
+        evidence_url: {type: string, format: uri}
+        ran_at: {type: string, format: date-time}
+    LedgerEntryIn:
+      $ref: '#/components/schemas/LedgerEntry'
+    ReviewRecordIn:
+      type: object
+      required: [subject, reviewer, decision, reason, reviewed_at]
+      properties:
+        subject: {type: string, description: مرجع المادة المُراجعة (مسار ملف أو كوميت)}
+        reviewer: {type: string, enum: [instinct, elkaref]}
+        decision: {type: string, enum: [accepted, rejected, accepted-with-notes]}
+        reason: {type: string, minLength: 1, description: سبب القبول أو الرفض — إلزامي}
+        reviewed_at: {type: string, format: date-time}

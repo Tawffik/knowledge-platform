@@ -10,6 +10,11 @@
 - جناح تطابق جديد test_contract_parity.py: **6/6 PASSED** — لا انحراف بين العقد اليدوي والسكيما المولدة.
 - إعادة تشغيل كاملة بعد التغيير: schema offline **9/9** + قبول حي **8/8** + تطابق **6/6** = **23/23**.
 
+## نتيجة مقاسة (٢٦ نوفمبر ~01:47 EET)
+- إصلاح خلل توافق: GET /knowledge كان يرجع tags كنص JSON بدل مصفوفة (العقد يفرض array) — أُصلح مع اختبار roundtrip.
+- GET /knowledge وGET /ledger أصبحا مُنوَّعين بـ response_model مطابق لسكيمات العقد (KnowledgeEntry/LedgerEntry) — جناح التطابق يتحقق من $ref الآن.
+- إعادة تشغيل كاملة: schema offline **9/9** + قبول حي **8/8** + تطابق **8/8** = **25/25**.
+
 ## التشغيل القابل للتكرار
 ```
 pip install fastapi uvicorn

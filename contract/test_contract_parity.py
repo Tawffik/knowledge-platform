@@ -85,3 +85,31 @@ def test_metric_run_schema_matches_manual_required():
     assert manual_req <= gen_req, (
         f"حقول MetricRun إلزامية في العقد وغير إلزامية في التنفيذ: "
         f"{sorted(manual_req - gen_req)}")
+
+
+def _response_items_ref(path):
+    ops = GENERATED["paths"][path]["get"]["responses"]["200"]["content"]
+    schema = ops["application/json"]["schema"]
+    return schema.get("items", {}).get("$ref", "")
+
+
+def test_list_endpoints_typed_by_contract_schemas():
+    assert _response_items_ref("/knowledge").endswith("/KnowledgeEntry")
+    assert _response_items_ref("/ledger").endswith("/LedgerEntry")
+
+
+def test_knowledge_tags_roundtrip_as_array():
+    """خَلل سابق: tags كانت ترجع نص JSON بدل مصفوفة — العقد يفرض array."""
+    payload = {
+        "title": "ملاحظة اختبار التطابق", "kind": "tool-note",
+        "verification": "documented",
+        "source_url": "https://example.com/parity-note",
+        "checked_at": "2026-11-26", "tags": ["parity", "contract"],
+    }
+    r = CLIENT.post("/knowledge", json=payload)
+    assert r.status_code in (201, 409)
+    r = CLIENT.get("/knowledge")
+    assert r.status_code == 200
+    mine = [e for e in r.json() if e["source_url"] == payload["source_url"]]
+    assert mine, "الإدخال المُنشأ غير موجود في القائمة"
+    assert mine[0]["tags"] == ["parity", "contract"]

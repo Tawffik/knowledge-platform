@@ -197,18 +197,23 @@ def get_project(slug: str = Path(pattern=r"^[a-z0-9-]+$")):
                            run_at=m[8]) for m in mr])
 
 
-@app.get("/knowledge")
+@app.get("/knowledge", response_model=list[KnowledgeEntry])
 def list_knowledge(q: Optional[str] = None, label: Optional[VerificationLabel] = None):
+    import json
     con = sqlite3.connect(DB)
     rows = con.execute(
         "SELECT title,kind,body,tags,verification,source_url,checked_at FROM knowledge").fetchall()
     con.close()
     keys = ("title", "kind", "body", "tags", "verification", "source_url", "checked_at")
-    out = [dict(zip(keys, r)) for r in rows]
+    out = []
+    for r in rows:
+        e = dict(zip(keys, r))
+        e["tags"] = json.loads(e["tags"]) if e["tags"] else None
+        out.append(KnowledgeEntry(**e))
     if q:
-        out = [e for e in out if q in (e["title"] or "")]
+        out = [e for e in out if q in (e.title or "")]
     if label:
-        out = [e for e in out if e["verification"] == label]
+        out = [e for e in out if e.verification == label]
     return out
 
 
@@ -230,16 +235,16 @@ def add_knowledge(entry: KnowledgeEntry):
     return {"created": True}
 
 
-@app.get("/ledger")
+@app.get("/ledger", response_model=list[LedgerEntry])
 def list_ledger(project: Optional[str] = None):
     con = sqlite3.connect(DB)
     rows = con.execute(
         "SELECT project_slug,action,result,run_command,evidence_url,ran_at FROM ledger").fetchall()
     con.close()
     keys = ("project_slug", "action", "result", "run_command", "evidence_url", "ran_at")
-    out = [dict(zip(keys, r)) for r in rows]
+    out = [LedgerEntry(**dict(zip(keys, r))) for r in rows]
     if project:
-        out = [e for e in out if e["project_slug"] == project]
+        out = [e for e in out if e.project_slug == project]
     return out
 
 

@@ -37,14 +37,22 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT NOT NULL,
         reviewer TEXT NOT NULL, decision TEXT NOT NULL, reason TEXT NOT NULL,
         reviewed_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS evidence(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, project_slug TEXT NOT NULL,
+        type TEXT NOT NULL, url TEXT NOT NULL, note TEXT, recorded_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS metric_runs(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, project_slug TEXT NOT NULL,
+        name TEXT NOT NULL, baseline TEXT NOT NULL, result TEXT NOT NULL,
+        method TEXT NOT NULL, run_command TEXT NOT NULL, environment TEXT,
+        pass_fail_criteria TEXT NOT NULL, declared_failing_cases TEXT NOT NULL,
+        run_at TEXT NOT NULL);
     """)
     con.commit()
     con.close()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
+def seed_db():
+    """بذر idempotent: يملأ الجداول الفارغة فقط."""
     con = sqlite3.connect(DB)
     if not con.execute("SELECT 1 FROM projects LIMIT 1").fetchone():
         con.execute(
@@ -52,7 +60,26 @@ async def lifespan(app: FastAPI):
             ("vulnradar", "VulnRadar", "ماسح ثغرات تعليمي", "wip",
              '["python","osint"]', "أصلي"))
         con.commit()
+    if not con.execute("SELECT 1 FROM evidence LIMIT 1").fetchone():
+        con.execute(
+            "INSERT INTO evidence(project_slug,type,url,note,recorded_at) VALUES(?,?,?,?,?)",
+            ("vulnradar", "commit",
+             "https://github.com/Tawffik/VulnRadar/commit/5d7a0f1",
+             "دمج cveNotify منشور بموافقة المالك", "2026-11-25"))
+        con.execute(
+            "INSERT INTO metric_runs(project_slug,name,baseline,result,method,run_command,environment,pass_fail_criteria,declared_failing_cases,run_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            ("vulnradar", "repo suite", "137/137", "156/156",
+             "جناح pytest الكامل بعد دمج cveNotify", "python -m pytest -q",
+             "python 3.11، أوفلاين", "0 فشل", "لا حالات فاشلة مقصودة",
+             "2026-11-25T22:00:00"))
+        con.commit()
     con.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    seed_db()
     yield
 
 
@@ -92,6 +119,30 @@ class LedgerEntry(BaseModel):
     ran_at: datetime
 
 
+class Evidence(BaseModel):
+    type: Literal["commit", "test-output", "video", "metric", "doc"]
+    url: HttpUrl
+    note: Optional[str] = None
+    recorded_at: date
+
+
+class MetricRun(BaseModel):
+    name: str
+    baseline: str
+    result: str
+    method: str
+    run_command: str
+    environment: Optional[str] = None
+    pass_fail_criteria: str
+    declared_failing_cases: str
+    run_at: datetime
+
+
+class ProjectDetail(Project):
+    evidence: list[Evidence] = []
+    metrics: list[MetricRun] = []
+
+
 class ReviewRecordIn(BaseModel):
     subject: str
     reviewer: Literal["instinct", "elkaref"]
@@ -119,18 +170,31 @@ def list_projects(skill: Optional[str] = None,
     return out
 
 
-@app.get("/projects/{slug}", response_model=Project)
+@app.get("/projects/{slug}", response_model=ProjectDetail)
 def get_project(slug: str = Path(pattern=r"^[a-z0-9-]+$")):
+    import json
     con = sqlite3.connect(DB)
     r = con.execute(
         "SELECT slug,title,summary,status,skills,attribution FROM projects WHERE slug=?",
         (slug,)).fetchone()
-    con.close()
     if not r:
+        con.close()
         raise HTTPException(404, "غير موجود")
-    import json
-    return Project(slug=r[0], title=r[1], summary=r[2], status=r[3],
-                   skills=json.loads(r[4]), attribution=r[5])
+    ev = con.execute(
+        "SELECT type,url,note,recorded_at FROM evidence WHERE project_slug=?",
+        (slug,)).fetchall()
+    mr = con.execute(
+        "SELECT name,baseline,result,method,run_command,environment,pass_fail_criteria,declared_failing_cases,run_at FROM metric_runs WHERE project_slug=?",
+        (slug,)).fetchall()
+    con.close()
+    return ProjectDetail(
+        slug=r[0], title=r[1], summary=r[2], status=r[3],
+        skills=json.loads(r[4]), attribution=r[5],
+        evidence=[Evidence(type=e[0], url=e[1], note=e[2], recorded_at=e[3]) for e in ev],
+        metrics=[MetricRun(name=m[0], baseline=m[1], result=m[2], method=m[3],
+                           run_command=m[4], environment=m[5],
+                           pass_fail_criteria=m[6], declared_failing_cases=m[7],
+                           run_at=m[8]) for m in mr])
 
 
 @app.get("/knowledge")

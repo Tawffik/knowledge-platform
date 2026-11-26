@@ -11,7 +11,7 @@
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field, HttpUrl
@@ -94,17 +94,17 @@ VerificationLabel = Literal["tested", "documented", "untested"]
 class Project(BaseModel):
     slug: str = Field(pattern=r"^[a-z0-9-]+$")
     title: str
-    summary: Optional[str] = None
+    summary: str | None = None
     status: Literal["active", "archived", "wip"]
     skills: list[str]
-    attribution: Optional[str] = None
+    attribution: str | None = None
 
 
 class KnowledgeEntry(BaseModel):
     title: str
     kind: Literal["writeup", "cheatsheet", "tool-note", "research"]
-    body: Optional[str] = None
-    tags: Optional[list[str]] = None
+    body: str | None = None
+    tags: list[str] | None = None
     verification: VerificationLabel
     source_url: HttpUrl
     checked_at: date
@@ -115,14 +115,14 @@ class LedgerEntry(BaseModel):
     action: str
     result: Literal["pass", "fail", "blocked"]
     run_command: str
-    evidence_url: Optional[HttpUrl] = None
+    evidence_url: HttpUrl | None = None
     ran_at: datetime
 
 
 class Evidence(BaseModel):
     type: Literal["commit", "test-output", "video", "metric", "doc"]
     url: HttpUrl
-    note: Optional[str] = None
+    note: str | None = None
     recorded_at: date
 
 
@@ -132,7 +132,7 @@ class MetricRun(BaseModel):
     result: str
     method: str
     run_command: str
-    environment: Optional[str] = None
+    environment: str | None = None
     pass_fail_criteria: str
     declared_failing_cases: str
     run_at: datetime
@@ -154,8 +154,8 @@ class ReviewRecordIn(BaseModel):
 # --- المسارات ---
 
 @app.get("/projects", response_model=list[Project])
-def list_projects(skill: Optional[str] = None,
-                  status: Optional[Literal["active", "archived", "wip"]] = None):
+def list_projects(skill: str | None = None,
+                  status: Literal["active", "archived", "wip"] | None = None):
     con = sqlite3.connect(DB)
     rows = con.execute(
         "SELECT slug,title,summary,status,skills,attribution FROM projects").fetchall()
@@ -198,7 +198,7 @@ def get_project(slug: str = Path(pattern=r"^[a-z0-9-]+$")):
 
 
 @app.get("/knowledge", response_model=list[KnowledgeEntry])
-def list_knowledge(q: Optional[str] = None, label: Optional[VerificationLabel] = None):
+def list_knowledge(q: str | None = None, label: VerificationLabel | None = None):
     import json
     con = sqlite3.connect(DB)
     rows = con.execute(
@@ -236,7 +236,7 @@ def add_knowledge(entry: KnowledgeEntry):
 
 
 @app.get("/ledger", response_model=list[LedgerEntry])
-def list_ledger(project: Optional[str] = None):
+def list_ledger(project: str | None = None):
     con = sqlite3.connect(DB)
     rows = con.execute(
         "SELECT project_slug,action,result,run_command,evidence_url,ran_at FROM ledger").fetchall()

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nx01 Platform — Zero Track Sec</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><nav class="nav" id="nav"></nav></header>
+<main>
+  <h1>منصة Nx01 — الوجه العام لمعمل أمني شغّال</h1>
+  <p class="sub">مش بورتفوليو ثابت: مشاريع حية، خزنة معلومات بج باونتي موثّقة بالمصادر،
+  وسجل نتائج عام لمعمل <b>Zero Track Lab</b> — بما فيه اللي اترفض. كل رقم في الصفحة دي
+  جاي من قاعدة البيانات عبر الـ API، مش مكتوب في الـ HTML.</p>
+
+  <div class="counters" id="counters"></div>
+
+  <h2>المشاريع الأبطال Hero Projects</h2>
+  <div class="grid" id="heroes"></div>
+
+  <h2>أعلى الدفعات الموثقة Top Verified Payouts</h2>
+  <div id="top-payouts"></div>
+
+  <h2>أحدث قيود سجل المعمل Latest Ledger Entries</h2>
+  <div id="latest-ledger"></div>
+</main>
+<footer><div class="in">Zero Track Sec · Nx01 — نفهم قبل ما نخترق ·
+  <a href="/docs">API</a> · البيانات موثّقة بالمصادر، والأرقام غير المؤكدة لا تُنشر هنا.</div></footer>
+<script src="/static/common.js"></script>
+<script>
+nav("/");
+(async () => {
+  const s = await api("/api/stats");
+  const cards = [
+    [s.projects_live + s.projects_proposed, "مشروعًا في المنصة Projects"],
+    [s.vault_entries, "قيدًا في الخزنة Vault entries"],
+    [money(s.verified_payouts_total_usd), "إجمالي دفعات موثقة Verified payouts"],
+    [s.ledger_entries, "قيدًا في سجل المعمل Ledger entries"],
+  ];
+  document.getElementById("counters").innerHTML = cards.map(([n, l]) =>
+    `<div class="counter"><div class="num">${n}</div><div class="lbl">${l}</div></div>`).join("");
+
+  const heroes = await api("/api/projects?hero=true");
+  document.getElementById("heroes").innerHTML = heroes.map(p => `
+    <div class="card" onclick="location='/projects#${esc(p.slug)}'">
+      <h3>${esc(p.name)}</h3><p class="tag">${esc(p.tagline || "")}</p>
+      <p>${esc((p.summary || "").slice(0, 170))}…</p>
+      <div class="badges">
+        <span class="badge hero">HERO</span>
+        ${p.status === "proposed" ? '<span class="badge proposed">PROPOSED</span>' : ""}
+        ${p.visibility === "private" ? '<span class="badge private">PRIVATE</span>' : ""}
+      </div></div>`).join("");
+
+  const payouts = await api("/api/vault?kind=payout&limit=5");
+  document.getElementById("top-payouts").innerHTML =
+    `<table><tr><th>المبلغ</th><th>البرنامج</th><th>الفئة</th><th>المصدر</th></tr>` +
+    payouts.map(v => `<tr><td class="amount">${money(v.amount_usd)}</td>
+      <td>${esc(v.program || "")}</td><td>${esc(v.category || "")}</td>
+      <td>${v.source_url ? `<a href="${esc(v.source_url)}" target="_blank" rel="noopener">source ↗</a>` : "—"}</td></tr>`).join("") +
+    `</table>`;
+
+  const ledger = await api("/api/ledger");
+  document.getElementById("latest-ledger").innerHTML = ledger.length ?
+    `<table><tr><th>Candidate</th><th>الفئة</th><th>قرار البوابة Gate</th><th>قرار البرنامج</th><th>المكافأة</th></tr>` +
+    ledger.slice(-5).reverse().map(e => `<tr>
+      <td class="mono">${esc(e.candidate_id)} ${e.is_example ? '<span class="example-tag">[EXAMPLE]</span>' : ""}</td>
+      <td>${esc(e.vuln_class || "")}</td>
+      <td class="verdict-${esc(e.gate_verdict || "")}">${esc(e.gate_verdict || "—")}</td>
+      <td>${esc(e.program_verdict || "—")}</td><td class="amount">${money(e.bounty_usd)}</td></tr>`).join("") +
+    `</table>` : `<div class="empty">السجل فاضي لسه — المعمل في مرحلة التصميم.</div>`;
+})().catch(e => { document.querySelector("main").insertAdjacentHTML("beforeend",
+  `<div class="empty">API error: ${esc(e.message)} — شغّل الـ seed: <span class="mono">python -m app.seed</span></div>`); });
+</script>
+</body>
+</html>

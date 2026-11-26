@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>المشاريع — Nx01 Platform</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><nav class="nav" id="nav"></nav></header>
+<main>
+  <h1>المشاريع Projects</h1>
+  <p class="sub">كل بطاقة هنا بيانات حية من الـ API. المشاريع المقترحة موسومة PROPOSED —
+  مفيش مشروع بيتدّعي إنه اتبنى قبل ما يتبني.</p>
+  <div class="filters">
+    <select id="f-status">
+      <option value="">الكل All</option>
+      <option value="live">شغّالة Live</option>
+      <option value="proposed">مقترحة Proposed</option>
+    </select>
+    <input type="search" id="f-q" placeholder="ابحث في المشاريع… search">
+  </div>
+  <div class="grid" id="grid"></div>
+  <div id="detail"></div>
+</main>
+<footer><div class="in">Zero Track Sec · Nx01</div></footer>
+<script src="/static/common.js"></script>
+<script>
+nav("/ui/projects");
+let all = [];
+async function load() {
+  const st = document.getElementById("f-status").value;
+  all = await api("/api/projects" + (st ? `?status=${st}` : ""));
+  render();
+}
+function render() {
+  const q = document.getElementById("f-q").value.toLowerCase();
+  const list = all.filter(p => !q ||
+    (p.name + " " + (p.summary || "") + " " + (p.skills || "")).toLowerCase().includes(q));
+  document.getElementById("grid").innerHTML = list.length ? list.map(p => `
+    <div class="card" onclick="show('${esc(p.slug)}')">
+      <h3>${esc(p.name)}</h3><p class="tag">${esc(p.tagline || "")}</p>
+      <p>${esc((p.summary || "").slice(0, 160))}…</p>
+      <div class="skills">${esc(p.skills || "")}</div>
+      <div class="badges">
+        ${p.is_hero ? '<span class="badge hero">HERO</span>' : ""}
+        <span class="badge ${p.status === "proposed" ? "proposed" : ""}">${esc(p.status.toUpperCase())}</span>
+        ${p.visibility === "private" ? '<span class="badge private">PRIVATE</span>' : ""}
+      </div></div>`).join("")
+    : `<div class="empty">لا نتائج</div>`;
+}
+async function show(slug) {
+  const p = await api("/api/projects/" + slug);
+  location.hash = slug;
+  document.getElementById("detail").innerHTML = `
+    <div class="detail">
+      <h2 style="margin-top:0">${esc(p.name)}</h2>
+      <p class="tag" style="color:var(--accent2)">${esc(p.tagline || "")}</p>
+      <p>${esc(p.summary || "")}</p>
+      <div class="skills">${esc(p.skills || "")}</div>
+      <div class="badges">
+        <span class="badge">${esc(p.status.toUpperCase())}</span>
+        <span class="badge">${esc(p.visibility || "")}</span>
+        ${p.repo_url ? `<a class="badge" href="${esc(p.repo_url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ""}
+      </div>
+      ${p.note ? `<p class="note" style="margin-top:14px">${esc(p.note)}</p>` : ""}
+    </div>`;
+  document.getElementById("detail").scrollIntoView({ behavior: "smooth" });
+}
+document.getElementById("f-status").addEventListener("change", load);
+document.getElementById("f-q").addEventListener("input", render);
+load().then(() => { if (location.hash) show(location.hash.slice(1)); });
+</script>
+</body>
+</html>

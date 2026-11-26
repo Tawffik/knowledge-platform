@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>الخزنة — Nx01 Platform</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><nav class="nav" id="nav"></nav></header>
+<main>
+  <h1>خزنة معلومات البج باونتي Bug Bounty Intel Vault</h1>
+  <p class="sub">دفعات موثقة من مصادرها، رايتبس حقيقية، تبسات منسوبة لأصحابها، وأبحاث قوية.
+  كل قيد مربوط بمصدره — والأرقام غير المؤكدة مش هنا، دي محجوزة في ملف leads منفصل.</p>
+  <div class="filters">
+    <select id="f-kind">
+      <option value="">كل الأنواع All kinds</option>
+      <option value="payout">دفعات Payouts</option>
+      <option value="writeup">رايتبس Writeups</option>
+      <option value="tip">تبسات Tips</option>
+      <option value="research">أبحاث Research</option>
+    </select>
+    <select id="f-cat"><option value="">كل الفئات All classes</option></select>
+    <input type="search" id="f-q" placeholder="ابحث… search title / lesson / program">
+    <span class="mono" id="count"></span>
+  </div>
+  <div id="list"></div>
+</main>
+<footer><div class="in">Zero Track Sec · Nx01 — كل قيد بمصدره.</div></footer>
+<script src="/static/common.js"></script>
+<script>
+nav("/vault");
+async function loadCats() {
+  const kind = document.getElementById("f-kind").value;
+  const cats = await api("/api/vault/categories" + (kind ? `?kind=${kind}` : ""));
+  const sel = document.getElementById("f-cat");
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">كل الفئات All classes</option>` +
+    cats.map(c => `<option value="${esc(c.category)}">${esc(c.category)} (${c.n})</option>`).join("");
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : "";
+}
+async function load() {
+  const kind = document.getElementById("f-kind").value;
+  const cat = document.getElementById("f-cat").value;
+  const q = document.getElementById("f-q").value;
+  const params = new URLSearchParams();
+  if (kind) params.set("kind", kind);
+  if (cat) params.set("category", cat);
+  if (q) params.set("q", q);
+  const rows = await api("/api/vault?" + params.toString());
+  document.getElementById("count").textContent = rows.length + " entries";
+  document.getElementById("list").innerHTML = rows.length ?
+    `<table><tr><th>النوع</th><th>العنوان</th><th>الفئة</th><th>المبلغ</th><th>الخلاصة / الدرس</th><th>المصدر</th></tr>` +
+    rows.map(v => `<tr>
+      <td><span class="badge">${esc(v.kind)}</span></td>
+      <td>${esc(v.title)}</td>
+      <td>${esc(v.category || "—")}</td>
+      <td class="amount">${money(v.amount_usd)}</td>
+      <td>${esc((v.summary || "").slice(0, 220))}</td>
+      <td>${v.source_url ? `<a href="${esc(v.source_url)}" target="_blank" rel="noopener">source ↗</a>` : "—"}</td>
+    </tr>`).join("") + `</table>`
+    : `<div class="empty">لا نتائج مطابقة</div>`;
+}
+document.getElementById("f-kind").addEventListener("change", async () => { await loadCats(); load(); });
+document.getElementById("f-cat").addEventListener("change", load);
+document.getElementById("f-q").addEventListener("input", load);
+loadCats().then(load);
+</script>
+</body>
+</html>

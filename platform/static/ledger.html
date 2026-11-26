@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>سجل المعمل — Nx01 Platform</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><nav class="nav" id="nav"></nav></header>
+<main>
+  <h1>سجل نتائج Zero Track Lab</h1>
+  <p class="sub">سجل عام لا يُعدّل (append-only) بكل نتائج المعمل: اللي عدى بوابة التحقق،
+  واللي اترفض وسبب رفضه، وقرار البرنامج، والمكافأة، وتكلفة التشغيل.
+  القيود الموسومة <span class="example-tag">[EXAMPLE]</span> بيانات توضيحية من قالب السجل لحد ما التشغيل الحقيقي يبدأ.</p>
+  <div class="filters">
+    <select id="f-gate">
+      <option value="">كل قرارات البوابة</option>
+      <option value="pass">Pass بس</option>
+      <option value="reject">Reject بس — المرفوضات</option>
+    </select>
+    <label class="mono" style="font-size:13px">
+      <input type="checkbox" id="f-examples" checked> تضمين الأمثلة التوضيحية
+    </label>
+  </div>
+  <div id="table"></div>
+  <h2>مقاييس شهرية Monthly Metrics</h2>
+  <div id="metrics"></div>
+</main>
+<footer><div class="in">Zero Track Sec · Nx01 — السجل بيتنشر كامل، مش منتقى.</div></footer>
+<script src="/static/common.js"></script>
+<script>
+nav("/ui/ledger");
+async function load() {
+  const gate = document.getElementById("f-gate").value;
+  const incl = document.getElementById("f-examples").checked;
+  const params = new URLSearchParams();
+  if (gate) params.set("gate_verdict", gate);
+  params.set("include_examples", incl);
+  const rows = await api("/api/ledger?" + params.toString());
+  document.getElementById("table").innerHTML = rows.length ?
+    `<table><tr><th>Candidate</th><th>التاريخ</th><th>البرنامج / الأصل</th><th>الفئة</th>
+     <th>قرار البوابة</th><th>سبب الرفض</th><th>مراجعة بشرية</th><th>قرار البرنامج</th>
+     <th>الخطورة</th><th>المكافأة</th><th>تكلفة التشغيل</th></tr>` +
+    rows.map(e => `<tr>
+      <td class="mono">${esc(e.candidate_id)} ${e.is_example ? '<span class="example-tag">[EXAMPLE]</span>' : ""}</td>
+      <td class="mono">${esc((e.recorded_at || "").slice(0, 10))}</td>
+      <td>${esc(e.program_handle || "")}<br><span class="mono">${esc(e.asset || "")}</span></td>
+      <td>${esc(e.vuln_class || "")}</td>
+      <td class="verdict-${esc(e.gate_verdict || "")}">${esc(e.gate_verdict || "—")}</td>
+      <td>${esc(e.gate_reject_reason || "—")}</td>
+      <td>${esc(e.human_review_action || "—")}</td>
+      <td>${esc(e.program_verdict || "—")}</td>
+      <td>${esc(e.program_severity || "—")}</td>
+      <td class="amount">${money(e.bounty_usd)}</td>
+      <td class="mono">${money(e.cost_infra_usd)}</td>
+    </tr>`).join("") + `</table>`
+    : `<div class="empty">لا قيود مطابقة</div>`;
+
+  const metrics = await api("/api/ledger/metrics");
+  document.getElementById("metrics").innerHTML = metrics.length ?
+    `<table><tr><th>الشهر</th><th>المقياس</th><th>القيمة</th><th>البسط / المقام</th></tr>` +
+    metrics.map(m => `<tr><td class="mono">${esc(m.month)}</td><td>${esc(m.name)}</td>
+      <td class="mono">${m.value ?? "—"}</td>
+      <td class="mono">${m.numerator ?? "—"} / ${m.denominator ?? "—"}</td></tr>`).join("") + `</table>`
+    : `<div class="empty">لا مقاييس منشورة بعد — أول شهر تشغيل حقيقي هيبدأ العدّ.</div>`;
+}
+document.getElementById("f-gate").addEventListener("change", load);
+document.getElementById("f-examples").addEventListener("change", load);
+load();
+</script>
+</body>
+</html>
